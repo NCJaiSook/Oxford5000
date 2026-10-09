@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oxford 5,000 Vocab Master - เรียนและจำคำศัพท์ภาษาอังกฤษ</title>
+  <meta name="description" content="เว็บแอปพลิเคชันเรียนและจดจำคำศัพท์ภาษาอังกฤษ 5,000 คำ จาก Oxford 5,000 พร้อมคำแปลไทย คำอธิบาย ตัวอย่างประโยค การออกเสียง US/UK คำเหมือน และคำตรงข้าม">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+  <!-- Google Fonts: Prompt & Sarabun -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Loading Screen -->
+  <div id="app-loading" class="app-loading-screen">
+    <div class="spinner"></div>
+    <div style="text-align: center;">
+      <h3 style="margin-bottom: 6px;">กำลังเตรียมคลังคำศัพท์ Oxford 5,000...</h3>
+      <p class="text-muted" style="font-size: 0.9rem;">กำลังโหลดข้อมูลคำศัพท์ คำแปลไทย เสียงอ่าน และตัวอย่างประโยค</p>
+    </div>
+  </div>
+
+  <!-- Header & Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-wrap" onclick="window.app.switchTab('explore')">
+        <img src="assets/favicon.svg" alt="Oxford 5000 Logo" class="brand-icon">
+        <div class="brand-title-wrap">
+          <h1>Oxford 5,000 Vocab Master</h1>
+          <span class="brand-subtitle">แอปเรียนและฝึกจำคำศัพท์ 5,000 คำ</span>
+        </div>
+      </div>
+
+      <nav class="main-nav">
+        <button class="nav-tab active" data-tab="explore">
+          <span>🔍</span> <span>คลังคำศัพท์</span>
+        </button>
+        <button class="nav-tab" data-tab="flashcards">
+          <span>🗂️</span> <span>บัตรคำศัพท์ (3D)</span>
+        </button>
+        <button class="nav-tab" data-tab="quiz">
+          <span>🎯</span> <span>แบบทดสอบ</span>
+        </button>
+        <button class="nav-tab" data-tab="audio">
+          <span>🎧</span> <span>ฟังต่อเนื่อง</span>
+        </button>
+        <button class="nav-tab" data-tab="progress">
+          <span>📊</span> <span>สถิติการเรียน</span>
+        </button>
+      </nav>
+
+      <div class="header-actions">
+        <!-- User Profile Pill -->
+        <button id="profile-pill-btn" class="profile-pill-btn" onclick="window.profileMgr.openProfileModal()" title="จัดการโปรไฟล์ผู้เรียน">
+          <span class="p-avatar">🦊</span>
+          <span class="p-name">ผู้เรียน</span>
+        </button>
+
+        <div class="streak-pill" title="จำนวนวันที่เรียนรู้ต่อเนื่อง">
+          <span>🔥</span> <span id="streak-count">0</span> วัน
+        </div>
+        <button class="btn btn-icon" title="คำศัพท์ที่บันทึกไว้ (Bookmarks)" onclick="window.app.searchByTerm(''); document.getElementById('filter-status').value = 'bookmarked'; window.app.filterStatus = 'bookmarked'; window.app.applyFilters(); window.app.switchTab('explore');">
+          ⭐ <span id="bookmark-count" style="font-size: 0.75rem; font-weight: bold; margin-left: 2px;">0</span>
+        </button>
+        <button id="theme-toggle" class="btn btn-secondary btn-sm" title="สลับโหมดสว่าง/มืด">
+          ☀️ โหมดสว่าง
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Views Container -->
+  <main class="app-main">
+
+    <!-- ==========================================
+         VIEW 1: Vocabulary Explorer
+         ========================================== -->
+    <section id="view-explore" class="view-panel active">
+      <div class="explorer-hero">
+        <div class="search-box-wrap">
+          <span class="search-icon-decor">🔍</span>
+          <input type="text" id="search-input" class="search-input" placeholder="ค้นหาคำศัพท์ภาษาอังกฤษ, คำแปลไทย, ความหมาย (กด / เพื่อค้นหา)..." autocomplete="off">
+          <button id="clear-search-btn" class="search-clear-btn" title="ล้างการค้นหา">✕</button>
+        </div>
+
+        <!-- CEFR Filter Pills -->
+        <div class="cefr-filter-bar">
+          <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-right: 4px;">ระดับ CEFR:</span>
+          <button class="cefr-pill active" data-cefr="all">ทั้งหมด (All)</button>
+          <button class="cefr-pill" data-cefr="A1">A1 (Beginner)</button>
+          <button class="cefr-pill" data-cefr="A2">A2 (Elementary)</button>
+          <button class="cefr-pill" data-cefr="B1">B1 (Intermediate)</button>
+          <button class="cefr-pill" data-cefr="B2">B2 (Upper-Int)</button>
+          <button class="cefr-pill" data-cefr="C1">C1 (Advanced)</button>
+        </div>
+
+        <!-- Secondary Filters (Topic, POS, Status, Sort) -->
+        <div class="secondary-filters-bar">
+          <div class="filter-selects-group">
+            <select id="filter-topic" class="form-select">
+              <option value="all">ทุกหมวดหมู่การใช้งาน</option>
+            </select>
+
+            <select id="filter-pos" class="form-select">
+              <option value="all">ทุกชนิดของคำ (POS)</option>
+              <option value="noun">คำนาม (Noun)</option>
+              <option value="verb">คำกริยา (Verb)</option>
+              <option value="adjective">คำคุณศัพท์ (Adjective)</option>
+              <option value="adverb">คำกริยาวิเศษณ์ (Adverb)</option>
+              <option value="preposition">คำบุพบท (Preposition)</option>
+              <option value="conjunction">คำสันธาน (Conjunction)</option>
+              <option value="pronoun">คำสรรพนาม (Pronoun)</option>
+            </select>
+
+            <select id="filter-status" class="form-select">
+              <option value="all">ทุกสถานะการเรียน</option>
+              <option value="bookmarked">⭐ บุ๊กมาร์กไว้</option>
+              <option value="learning">⏳ กำลังเรียนรู้</option>
+              <option value="mastered">✅ จำได้แล้ว</option>
+              <option value="unread">🆕 ยังไม่ได้เรียน</option>
+            </select>
+
+            <select id="sort-select" class="form-select">
+              <option value="az">เรียง A ➔ Z</option>
+              <option value="za">เรียง Z ➔ A</option>
+              <option value="cefr-asc">ระดับง่าย ➔ ยาก (A1 ➔ C1)</option>
+              <option value="cefr-desc">ระดับยาก ➔ ง่าย (C1 ➔ A1)</option>
+              <option value="random">🔀 สุ่มลำดับคำ</option>
+            </select>
+          </div>
+
+          <div class="search-count-text" id="search-count">
+            กำลังโหลดคำศัพท์...
+          </div>
+        </div>
+      </div>
+
+      <!-- Word Cards Grid -->
+      <div id="word-grid" class="word-cards-grid"></div>
+
+      <!-- Load More Button -->
+      <div id="load-more-container" class="load-more-wrap" style="display: none;">
+        <button id="load-more-btn" class="btn btn-secondary btn-lg" onclick="window.app.loadMore()">
+          โหลดคำศัพท์เพิ่มเติม
+        </button>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         VIEW 2: Flashcards (3D)
+         ========================================== -->
+    <section id="view-flashcards" class="view-panel">
+      <!-- Deck Filter Setup Bar -->
+      <div class="secondary-filters-bar" style="max-width: 680px; margin: 0 auto 20px;">
+        <div class="filter-selects-group" style="width: 100%; justify-content: space-between;">
+          <select id="fc-filter-cefr" class="form-select" onchange="window.flashcardCtrl.filterCefr = this.value; window.flashcardCtrl.buildDeck(); window.flashcardCtrl.render();">
+            <option value="all">ทุกระดับ CEFR</option>
+            <option value="A1">ระดับ A1</option>
+            <option value="A2">ระดับ A2</option>
+            <option value="B1">ระดับ B1</option>
+            <option value="B2">ระดับ B2</option>
+            <option value="C1">ระดับ C1</option>
+          </select>
+
+          <select id="fc-filter-topic" class="form-select" onchange="window.flashcardCtrl.filterTopic = this.value; window.flashcardCtrl.buildDeck(); window.flashcardCtrl.render();">
+            <option value="all">ทุกหมวดหมู่การใช้งาน</option>
+          </select>
+
+          <select id="fc-filter-status" class="form-select" onchange="window.flashcardCtrl.filterStatus = this.value; window.flashcardCtrl.buildDeck(); window.flashcardCtrl.render();">
+            <option value="all">คำศัพท์ทั้งหมด</option>
+            <option value="bookmarked">⭐ บุ๊กมาร์กเท่านั้น</option>
+            <option value="learning">⏳ กำลังเรียนรู้</option>
+            <option value="mastered">✅ จำได้แล้ว</option>
+            <option value="unlearned">🆕 ยังไม่เคยดู</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="flashcard-container"></div>
+    </section>
+
+    <!-- ==========================================
+         VIEW 3: Quiz Mode
+         ========================================== -->
+    <section id="view-quiz" class="view-panel">
+      <div id="quiz-container"></div>
+    </section>
+
+    <!-- ==========================================
+         VIEW 4: Continuous Hands-Free Audio Player
+         ========================================== -->
+    <section id="view-audio" class="view-panel">
+      <div id="audio-playlist-container"></div>
+    </section>
+
+    <!-- ==========================================
+         VIEW 5: Progress & Statistics Dashboard
+         ========================================== -->
+    <section id="view-progress" class="view-panel">
+      <div id="progress-dashboard-container"></div>
+    </section>
+
+  </main>
+
+  <!-- Word Detail Modal Dialog -->
+  <div id="word-modal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header-bar">
+        <button id="modal-close-btn" class="modal-close-icon-btn" title="ปิดหน้าต่าง (Esc)">✕</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Profile & Registration Modal Dialog -->
+  <div id="profile-modal" class="modal-overlay">
+    <div class="modal-container profile-modal-container">
+      <div class="modal-header-bar">
+        <button class="modal-close-icon-btn" onclick="window.profileMgr.closeProfileModal()" title="ปิดหน้าต่าง (Esc)">✕</button>
+      </div>
+      <div id="profile-modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>
+        <strong>Oxford 5,000 Vocab Master</strong> &copy; 2026 | สร้างขึ้นเพื่อการศึกษาและการจำคำศัพท์ภาษาอังกฤษอย่างมีประสิทธิภาพ
+      </p>
+      <p style="font-size: 0.8rem; margin-top: 4px; color: var(--text-muted);">
+        อ้างอิงคำศัพท์จาก <strong>Oxford 5000™</strong> โดย Oxford University Press และความหมายภาษาไทยจาก <strong>LEXiTRON</strong>
+      </p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/storage.js"></script>
+  <script src="js/profile.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/flashcard.js"></script>
+  <script src="js/quiz.js"></script>
+  <script src="js/playlist.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
