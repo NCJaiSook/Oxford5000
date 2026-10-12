@@ -514,16 +514,74 @@ body {
   margin-bottom: 10px;
 }
 
+.card-badges-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.card-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-check {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition: var(--transition);
+  padding: 0;
+  line-height: 1;
+}
+
+.btn-check:hover {
+  background: var(--success-light);
+  border-color: var(--success);
+  color: var(--success);
+  transform: scale(1.1);
+}
+
+.btn-check.active {
+  background: var(--success);
+  border-color: var(--success);
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.45);
+}
+
 .btn-star {
   background: none;
   border: none;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px 4px;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  line-height: 1;
 }
-.btn-star:hover, .btn-star.active { color: var(--gold); }
+
+.btn-star:hover {
+  color: var(--gold);
+  transform: scale(1.15);
+}
+
+.btn-star.active {
+  color: var(--gold);
+}
 
 .card-word-title-row {
   margin-bottom: 8px;
