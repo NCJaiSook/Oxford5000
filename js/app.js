@@ -227,7 +227,16 @@ class VocabApp {
         return;
       }
 
-      // 2. Star bookmark button click
+      // 2. Mastered checkmark button click
+      const checkBtn = e.target.closest('.btn-check');
+      if (checkBtn) {
+        e.stopPropagation();
+        const wordId = parseInt(checkBtn.dataset.id, 10);
+        this.toggleCardMastered(wordId, checkBtn);
+        return;
+      }
+
+      // 3. Star bookmark button click
       const starBtn = e.target.closest('.btn-star');
       if (starBtn) {
         e.stopPropagation();
@@ -236,7 +245,7 @@ class VocabApp {
         return;
       }
 
-      // 3. Card click -> open detail modal
+      // 4. Card click -> open detail modal
       const card = e.target.closest('.word-card');
       if (card) {
         const wordId = parseInt(card.dataset.id, 10);
@@ -359,11 +368,18 @@ class VocabApp {
     return `
       <div class="word-card ${isMastered ? 'card-mastered' : isLearning ? 'card-learning' : ''}" data-id="${word.id}">
         <div class="card-top-row">
-          <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${word.cefr}</span>
-          <span class="badge badge-pos">${word.pos}</span>
-          <button class="btn-star ${isBookmarked ? 'active' : ''}" data-id="${word.id}" title="${isBookmarked ? 'ยกเลิกบุ๊กมาร์ก' : 'บุ๊กมาร์ก'}">
-            ${isBookmarked ? '★' : '☆'}
-          </button>
+          <div class="card-badges-left">
+            <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${word.cefr}</span>
+            <span class="badge badge-pos">${word.pos}</span>
+          </div>
+          <div class="card-actions-right">
+            <button class="btn-check ${isMastered ? 'active' : ''}" data-id="${word.id}" title="${isMastered ? 'จำได้แล้ว (คลิกเพื่อยกเลิก)' : 'ทำเครื่องหมายว่าจำได้แล้ว'}" aria-label="${isMastered ? 'จำได้แล้ว' : 'ทำเครื่องหมายว่าจำได้แล้ว'}">
+              ✓
+            </button>
+            <button class="btn-star ${isBookmarked ? 'active' : ''}" data-id="${word.id}" title="${isBookmarked ? 'ยกเลิกบุ๊กมาร์ก' : 'บุ๊กมาร์ก'}" aria-label="${isBookmarked ? 'ยกเลิกบุ๊กมาร์ก' : 'บุ๊กมาร์ก'}">
+              ${isBookmarked ? '★' : '☆'}
+            </button>
+          </div>
         </div>
 
         <div class="card-word-title-row">
@@ -392,10 +408,53 @@ class VocabApp {
     `;
   }
 
+  toggleCardMastered(id, btnEl) {
+    const isCurrentlyMastered = window.storageMgr.isMastered(id);
+    const newState = !isCurrentlyMastered;
+    window.storageMgr.setMastered(id, newState);
+
+    if (this.filterStatus && this.filterStatus !== 'all') {
+      this.applyFilters();
+      this.updateProgressBadge();
+      return;
+    }
+
+    btnEl.classList.toggle('active', newState);
+    btnEl.setAttribute('title', newState ? 'จำได้แล้ว (คลิกเพื่อยกเลิก)' : 'ทำเครื่องหมายว่าจำได้แล้ว');
+    btnEl.setAttribute('aria-label', newState ? 'จำได้แล้ว' : 'ทำเครื่องหมายว่าจำได้แล้ว');
+
+    const card = btnEl.closest('.word-card');
+    if (card) {
+      card.classList.toggle('card-mastered', newState);
+      card.classList.remove('card-learning');
+
+      const footer = card.querySelector('.card-footer-topic');
+      if (footer) {
+        const oldPills = footer.querySelectorAll('.status-pill');
+        oldPills.forEach(p => p.remove());
+
+        if (newState) {
+          const pill = document.createElement('span');
+          pill.className = 'status-pill status-pill-mastered';
+          pill.textContent = '✅ จำได้แล้ว';
+          footer.appendChild(pill);
+        }
+      }
+    }
+
+    this.updateProgressBadge();
+  }
+
   toggleCardBookmark(id, btnEl) {
     const isBookmarked = window.storageMgr.toggleBookmark(id);
     btnEl.classList.toggle('active', isBookmarked);
     btnEl.innerHTML = isBookmarked ? '★' : '☆';
+    btnEl.setAttribute('title', isBookmarked ? 'ยกเลิกบุ๊กมาร์ก' : 'บุ๊กมาร์ก');
+    btnEl.setAttribute('aria-label', isBookmarked ? 'ยกเลิกบุ๊กมาร์ก' : 'บุ๊กมาร์ก');
+
+    if (this.filterStatus === 'bookmarked') {
+      this.applyFilters();
+    }
     this.updateProgressBadge();
   }
 
