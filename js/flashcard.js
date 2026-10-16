@@ -18,9 +18,22 @@ class FlashcardController {
 
   init(containerEl) {
     this.container = containerEl;
+    this.autoPronounce = !!(window.storageMgr && window.storageMgr.settings && window.storageMgr.settings.autoPronounce);
+    this._syncFilterSelects();
     this.attachEventListeners();
-    this.buildDeck();
+    if (this.deck.length === 0) {
+      this.buildDeck();
+    }
     this.render();
+  }
+
+  _syncFilterSelects() {
+    const cefrSelect = document.getElementById('fc-filter-cefr');
+    const topicSelect = document.getElementById('fc-filter-topic');
+    const statusSelect = document.getElementById('fc-filter-status');
+    if (cefrSelect) cefrSelect.value = this.filterCefr;
+    if (topicSelect) topicSelect.value = this.filterTopic;
+    if (statusSelect) statusSelect.value = this.filterStatus;
   }
 
   buildDeck() {
@@ -67,6 +80,18 @@ class FlashcardController {
     this.currentIndex = 0;
     this.isFlipped = false;
     this.render();
+    this.triggerAutoPronounce();
+  }
+
+  toggleAutoPronounce() {
+    this.autoPronounce = !this.autoPronounce;
+    if (window.storageMgr) {
+      window.storageMgr.updateSettings({ autoPronounce: this.autoPronounce });
+    }
+    this.render();
+    if (this.autoPronounce) {
+      this.triggerAutoPronounce();
+    }
   }
 
   getCurrentWord() {
@@ -77,7 +102,7 @@ class FlashcardController {
   flip() {
     this.isFlipped = !this.isFlipped;
     window.audioEngine.playFlipSound();
-    const cardEl = this.container.querySelector('.fc-card');
+    const cardEl = this.container ? this.container.querySelector('.fc-card') : null;
     if (cardEl) {
       cardEl.classList.toggle('flipped', this.isFlipped);
     }
@@ -110,19 +135,27 @@ class FlashcardController {
     } else if (level === 'good') {
       window.storageMgr.setLearning(word.id, true);
     } else if (level === 'hard') {
-      // Stay in review pool
       window.storageMgr.setLearning(word.id, true);
     }
 
     if (window.app) window.app.updateProgressBadge();
-    this.next();
+
+    if (this.currentIndex < this.deck.length - 1) {
+      this.next();
+    } else if (this.deck.length > 0) {
+      // Wrap back to start of deck if on last card
+      this.currentIndex = 0;
+      this.isFlipped = false;
+      this.render();
+      this.triggerAutoPronounce();
+    }
   }
 
   triggerAutoPronounce() {
     const word = this.getCurrentWord();
     if (!word) return;
-    if (this.autoPronounce || window.storageMgr.settings.autoPronounce) {
-      const pref = window.storageMgr.settings.preferredAccent || 'us';
+    if (this.autoPronounce || (window.storageMgr && window.storageMgr.settings.autoPronounce)) {
+      const pref = (window.storageMgr && window.storageMgr.settings.preferredAccent) || 'us';
       window.audioEngine.playWord(word.word, pref);
     }
   }
@@ -185,13 +218,15 @@ class FlashcardController {
     const isBookmarked = window.storageMgr.isBookmarked(word.id);
 
     const percent = Math.round(((this.currentIndex + 1) / this.deck.length) * 100);
+    const safeWordAttr = window.escapeAttr(word.word);
+    const safeExAttr = word.example ? window.escapeAttr(word.example) : '';
 
     const synonymsHtml = word.synonyms && word.synonyms.length > 0
-      ? word.synonyms.map(s => `<span class="tag tag-syn">${s}</span>`).join('')
+      ? word.synonyms.map(s => `<span class="tag tag-syn">${window.escapeHtml(s)}</span>`).join('')
       : '<span class="text-muted">-</span>';
 
     const antonymsHtml = word.antonyms && word.antonyms.length > 0
-      ? word.antonyms.map(a => `<span class="tag tag-ant">${a}</span>`).join('')
+      ? word.antonyms.map(a => `<span class="tag tag-ant">${window.escapeHtml(a)}</span>`).join('')
       : '<span class="text-muted">-</span>';
 
     this.container.innerHTML = `
@@ -199,13 +234,19 @@ class FlashcardController {
         <!-- Deck Controls & Progress -->
         <div class="fc-top-bar">
           <div class="fc-deck-info">
-            <span class="fc-counter">คำที่ <strong>${this.currentIndex + 1}</strong> จาก <strong>${this.deck.length}</strong></span>
+            <span class="fc-counter">
+              คำที่ <strong>${(this.currentIndex + 1).toLocaleString()}</strong> จาก <strong>${this.deck.length.toLocaleString()}</strong>
+              ${isMastered ? '<span class="status-pill status-pill-mastered" style="margin-left:8px;">✅ จำได้แล้ว</span>' : isLearning ? '<span class="status-pill status-pill-learning" style="margin-left:8px;">⏳ กำลังเรียน</span>' : ''}
+            </span>
             <div class="fc-progress-bar">
               <div class="fc-progress-fill" style="width: ${percent}%;"></div>
             </div>
           </div>
           <div class="fc-actions-top">
-            <button class="btn btn-icon ${isBookmarked ? 'active text-gold' : ''}" title="บันทึกคำศัพท์" onclick="window.flashcardCtrl.toggleBookmark()">
+            <button class="btn ${this.autoPronounce ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="window.flashcardCtrl.toggleAutoPronounce()" title="เปิด/ปิด การออกเสียงอัตโนมัติเมื่อเปลี่ยนการ์ด">
+              🔊 อ่านอัตโนมัติ: ${this.autoPronounce ? 'เปิด' : 'ปิด'}
+            </button>
+            <button class="btn btn-icon ${isBookmarked ? 'active text-gold' : ''}" title="${isBookmarked ? 'ยกเลิกบุ๊กมาร์ก' : 'บุ๊กมาร์กคำศัพท์'}" onclick="window.flashcardCtrl.toggleBookmark()">
               ${isBookmarked ? '★' : '☆'}
             </button>
             <button class="btn btn-secondary btn-sm" onclick="window.flashcardCtrl.shuffle()" title="สลับลำดับคำศัพท์">
@@ -220,56 +261,56 @@ class FlashcardController {
             <!-- Front -->
             <div class="fc-face fc-front">
               <div class="fc-badge-row">
-                <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${word.cefr}</span>
-                <span class="badge badge-pos">${word.pos}</span>
-                <span class="badge badge-topic">${word.topic}</span>
+                <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${window.escapeHtml(word.cefr)}</span>
+                <span class="badge badge-pos">${window.escapeHtml(word.pos)}</span>
+                <span class="badge badge-topic">${window.escapeHtml(word.topic)}</span>
               </div>
 
               <div class="fc-word-main">
-                <h2 class="fc-word-text">${word.word}</h2>
+                <h2 class="fc-word-text">${window.escapeHtml(word.word)}</h2>
               </div>
 
               <div class="fc-phonetics">
-                <div class="phon-item" onclick="event.stopPropagation(); window.audioEngine.playWord('${word.word}', 'us', this)">
+                <div class="phon-item" onclick="event.stopPropagation(); window.audioEngine.playWord('${safeWordAttr}', 'us', this)">
                   <span class="flag-icon">🇺🇸</span>
-                  <span class="phon-text">${word.phon_us || '-'}</span>
-                  <button class="btn-play-mini" title="ฟังสำเนียงอเมริกัน">🔊 US</button>
+                  <span class="phon-text">${window.escapeHtml(word.phon_us || '-')}</span>
+                  <button class="btn-play-mini" title="ฟังสำเนียงอเมริกัน (กด U)">🔊 US</button>
                 </div>
-                <div class="phon-item" onclick="event.stopPropagation(); window.audioEngine.playWord('${word.word}', 'uk', this)">
+                <div class="phon-item" onclick="event.stopPropagation(); window.audioEngine.playWord('${safeWordAttr}', 'uk', this)">
                   <span class="flag-icon">🇬🇧</span>
-                  <span class="phon-text">${word.phon_uk || '-'}</span>
-                  <button class="btn-play-mini" title="ฟังสำเนียงอังกฤษ">🔊 UK</button>
+                  <span class="phon-text">${window.escapeHtml(word.phon_uk || '-')}</span>
+                  <button class="btn-play-mini" title="ฟังสำเนียงอังกฤษ (กด B)">🔊 UK</button>
                 </div>
               </div>
 
               <div class="fc-hint-action">
-                <span class="fc-flip-hint">💡 คลิกการ์ด หรือกด <code>Space</code> เพื่อดูคำแปล</span>
+                <span class="fc-flip-hint">💡 คลิกการ์ด หรือกด <code>Space</code> เพื่อพลิกดูความหมาย</span>
               </div>
             </div>
 
             <!-- Back -->
             <div class="fc-face fc-back">
               <div class="fc-badge-row">
-                <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${word.cefr}</span>
-                <span class="badge badge-pos">${word.pos}</span>
-                <span class="fc-word-small">${word.word}</span>
+                <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${window.escapeHtml(word.cefr)}</span>
+                <span class="badge badge-pos">${window.escapeHtml(word.pos)}</span>
+                <span class="fc-word-small">${window.escapeHtml(word.word)}</span>
               </div>
 
               <div class="fc-thai-meaning">
-                <h3>${word.def_th}</h3>
+                <h3>${window.escapeHtml(word.def_th)}</h3>
               </div>
 
               <div class="fc-en-def">
-                <p><strong>Oxford Definition:</strong> ${word.def_en}</p>
+                <p><strong>Oxford Definition:</strong> ${window.escapeHtml(word.def_en)}</p>
               </div>
 
               ${word.example ? `
-              <div class="fc-example" onclick="event.stopPropagation(); window.audioEngine.speakSentence('${word.example.replace(/'/g, "\\'")}', 'en-US')">
+              <div class="fc-example" onclick="event.stopPropagation(); window.audioEngine.speakSentence('${safeExAttr}', 'en-US', 0.95, this)">
                 <div class="fc-example-header">
                   <span>💬 ตัวอย่างประโยค</span>
                   <button class="btn-play-mini" title="ฟังประโยคตัวอย่าง">🔊 ฟัง</button>
                 </div>
-                <p class="fc-example-text">"${word.example}"</p>
+                <p class="fc-example-text">"${window.escapeHtml(word.example)}"</p>
               </div>
               ` : ''}
 
@@ -332,12 +373,7 @@ class FlashcardController {
     this.filterCefr = 'all';
     this.filterTopic = 'all';
     this.filterStatus = 'all';
-    const cefrSelect = document.getElementById('fc-filter-cefr');
-    const topicSelect = document.getElementById('fc-filter-topic');
-    const statusSelect = document.getElementById('fc-filter-status');
-    if (cefrSelect) cefrSelect.value = 'all';
-    if (topicSelect) topicSelect.value = 'all';
-    if (statusSelect) statusSelect.value = 'all';
+    this._syncFilterSelects();
     this.buildDeck();
     this.render();
   }

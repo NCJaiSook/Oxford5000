@@ -28,7 +28,19 @@ class ProfileManager {
 
   init() {
     this.updateHeaderProfilePill();
+    this._attachModalBackdropClose();
     this._checkFirstVisit();
+  }
+
+  _attachModalBackdropClose() {
+    const modal = document.getElementById('profile-modal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          this.closeProfileModal();
+        }
+      });
+    }
   }
 
   _checkFirstVisit() {
@@ -47,9 +59,10 @@ class ProfileManager {
 
     const profile = window.storageMgr.getActiveProfile();
     if (profile) {
+      const safeName = window.escapeHtml(profile.name || 'ผู้เรียน');
       pill.innerHTML = `
-        <span class="p-avatar">${profile.avatar || '🦊'}</span>
-        <span class="p-name">${profile.name || 'ผู้เรียน'}</span>
+        <span class="p-avatar">${window.escapeHtml(profile.avatar || '🦊')}</span>
+        <span class="p-name">${safeName}</span>
       `;
       pill.title = `โปรไฟล์: ${profile.name} (คลิกเพื่อจัดการโปรไฟล์)`;
     }
@@ -198,16 +211,17 @@ class ProfileManager {
     const currentProfile = window.storageMgr.getActiveProfile();
     const allProfiles = window.storageMgr.getProfiles();
     const stats = window.storageMgr.getStats(window.vocabData ? window.vocabData.length : 5943);
+    const safeCurrentName = window.escapeHtml(currentProfile.name);
 
     modalBody.innerHTML = `
       <div class="profile-modal-content">
         <!-- Current Profile Card -->
         <div class="current-profile-card">
-          <div class="cp-avatar-box">${currentProfile.avatar || '🦊'}</div>
+          <div class="cp-avatar-box">${window.escapeHtml(currentProfile.avatar || '🦊')}</div>
           <div class="cp-info">
             <div class="cp-title-row">
-              <h3>${currentProfile.name}</h3>
-              <span class="badge badge-cefr badge-${(currentProfile.targetCefr || 'B2').toLowerCase()}">เป้าหมาย: ${currentProfile.targetCefr || 'B2'}</span>
+              <h3>${safeCurrentName}</h3>
+              <span class="badge badge-cefr badge-${(currentProfile.targetCefr || 'B2').toLowerCase()}">เป้าหมาย: ${window.escapeHtml(currentProfile.targetCefr || 'B2')}</span>
             </div>
             <p class="cp-sub">เป้าหมายประจำวัน: <strong>${currentProfile.dailyGoal || 20} คำ/วัน</strong> | สมาชิกตั้งแต่: ${new Date(currentProfile.createdAt).toLocaleDateString('th-TH')}</p>
             <div class="cp-stats-pills">
@@ -216,7 +230,7 @@ class ProfileManager {
               <span class="cp-pill">🔥 Streak: <strong>${stats.streak} วัน</strong></span>
             </div>
           </div>
-          <button class="btn btn-outline btn-sm cp-edit-btn" onclick="window.profileMgr.openEditProfileModal('${currentProfile.id}')" title="แก้ไขโปรไฟล์">
+          <button class="btn btn-outline btn-sm cp-edit-btn" onclick="window.profileMgr.openEditProfileModal('${window.escapeAttr(currentProfile.id)}')" title="แก้ไขโปรไฟล์">
             ✏️ แก้ไข
           </button>
         </div>
@@ -234,11 +248,11 @@ class ProfileManager {
             ${allProfiles.map(p => {
               const isCurrent = p.id === currentProfile.id;
               return `
-                <div class="profile-list-item ${isCurrent ? 'active' : ''}" onclick="window.profileMgr.switchProfile('${p.id}')">
-                  <span class="pli-avatar">${p.avatar}</span>
+                <div class="profile-list-item ${isCurrent ? 'active' : ''}" onclick="window.profileMgr.switchProfile('${window.escapeAttr(p.id)}')">
+                  <span class="pli-avatar">${window.escapeHtml(p.avatar)}</span>
                   <div class="pli-info">
-                    <strong>${p.name}</strong>
-                    <span class="text-muted" style="font-size: 0.8rem;">เป้าหมาย: ${p.targetCefr} (${p.dailyGoal} คำ/วัน)</span>
+                    <strong>${window.escapeHtml(p.name)}</strong>
+                    <span class="text-muted" style="font-size: 0.8rem;">เป้าหมาย: ${window.escapeHtml(p.targetCefr)} (${p.dailyGoal} คำ/วัน)</span>
                   </div>
                   ${isCurrent 
                     ? '<span class="pli-badge-active">กำลังใช้งาน</span>' 
@@ -262,7 +276,7 @@ class ProfileManager {
             📥 สำรองข้อมูลโปรไฟล์ (Export JSON)
           </button>
           ${allProfiles.length > 1 ? `
-          <button class="btn btn-outline btn-sm text-danger" onclick="window.profileMgr.confirmDeleteProfile('${currentProfile.id}', '${currentProfile.name}')">
+          <button class="btn btn-outline btn-sm text-danger" onclick="window.profileMgr.confirmDeleteProfile('${window.escapeAttr(currentProfile.id)}')">
             🗑️ ลบโปรไฟล์นี้
           </button>
           ` : ''}
@@ -283,7 +297,9 @@ class ProfileManager {
     this.openProfileModal(); // Refresh modal view
   }
 
-  confirmDeleteProfile(profileId, profileName) {
+  confirmDeleteProfile(profileId) {
+    const profile = window.storageMgr.getProfiles().find(p => p.id === profileId);
+    const profileName = profile ? profile.name : 'โปรไฟล์นี้';
     if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบโปรไฟล์ "${profileName}"? ข้อมูลคำศัพท์ที่บันทึกไว้ในโปรไฟล์นี้จะถูกลบออกจากเครื่องอย่างถาวร`)) {
       window.storageMgr.deleteProfile(profileId);
       this.updateHeaderProfilePill();
@@ -302,19 +318,20 @@ class ProfileManager {
     const modal = document.getElementById('profile-modal');
     const modalBody = document.getElementById('profile-modal-body');
     if (!modal || !modalBody) return;
+    const safeName = window.escapeHtml(profile.name);
 
     modalBody.innerHTML = `
       <div class="profile-modal-content">
         <div class="profile-header-center">
-          <div class="profile-header-icon">${this.selectedAvatar}</div>
-          <h2>แก้ไขข้อมูลโปรไฟล์: ${profile.name}</h2>
+          <div class="profile-header-icon">${window.escapeHtml(this.selectedAvatar)}</div>
+          <h2>แก้ไขข้อมูลโปรไฟล์: ${safeName}</h2>
           <p class="text-muted">ปรับเปลี่ยนชื่อ รูปตัวแทน หรือเป้าหมายการเรียนของคุณ</p>
         </div>
 
-        <form id="edit-profile-form" onsubmit="event.preventDefault(); window.profileMgr.submitEditProfile('${profile.id}');">
+        <form id="edit-profile-form" onsubmit="event.preventDefault(); window.profileMgr.submitEditProfile('${window.escapeAttr(profile.id)}');">
           <div class="form-group-p">
             <label for="edit-name">ชื่อ หรือ ชื่อเล่น:</label>
-            <input type="text" id="edit-name" class="form-input-p" value="${profile.name}" required maxlength="30">
+            <input type="text" id="edit-name" class="form-input-p" value="${safeName}" required maxlength="30">
           </div>
 
           <div class="form-group-p">

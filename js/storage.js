@@ -16,6 +16,29 @@ const STORAGE_KEYS = {
   LEGACY_QUIZ_STATS: 'oxford5000_quiz_stats'
 };
 
+/**
+ * HTML & Attribute Escaping Utilities to prevent XSS and broken inline handlers
+ */
+window.escapeHtml = function(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+window.escapeAttr = function(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/\n/g, ' ')
+    .replace(/\r/g, '');
+};
+
 class StorageManager {
   constructor() {
     this.profiles = this._load(STORAGE_KEYS.PROFILES, []);
@@ -28,7 +51,9 @@ class StorageManager {
   _load(key, fallback) {
     try {
       const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : fallback;
+      if (!data) return fallback;
+      const parsed = JSON.parse(data);
+      return parsed !== null && parsed !== undefined ? parsed : fallback;
     } catch (e) {
       console.warn(`Error loading ${key} from localStorage:`, e);
       return fallback;

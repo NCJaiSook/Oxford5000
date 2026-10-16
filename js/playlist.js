@@ -21,6 +21,7 @@ class AudioPlaylistPlayer {
 
     this.filterCefr = 'all';
     this.filterTopic = 'all';
+    this.filterStatus = 'all';
   }
 
   init(containerEl) {
@@ -42,11 +43,23 @@ class AudioPlaylistPlayer {
       if (this.filterTopic !== 'all' && item.topic !== this.filterTopic) {
         return false;
       }
+      if (this.filterStatus === 'bookmarked' && !window.storageMgr.isBookmarked(item.id)) {
+        return false;
+      }
+      if (this.filterStatus === 'learning' && !window.storageMgr.isLearning(item.id)) {
+        return false;
+      }
+      if (this.filterStatus === 'unlearned' && window.storageMgr.isMastered(item.id)) {
+        return false;
+      }
       return true;
     });
 
     if (this.isShuffled) {
-      list = [...list].sort(() => 0.5 - Math.random());
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
     }
 
     this.playlist = list;
@@ -76,6 +89,7 @@ class AudioPlaylistPlayer {
   }
 
   next() {
+    if (this.playlist.length === 0) return;
     clearTimeout(this.timer);
     window.audioEngine.stop();
     if (this.currentIndex < this.playlist.length - 1) {
@@ -90,6 +104,7 @@ class AudioPlaylistPlayer {
   }
 
   prev() {
+    if (this.playlist.length === 0) return;
     clearTimeout(this.timer);
     window.audioEngine.stop();
     if (this.currentIndex > 0) {
@@ -121,7 +136,7 @@ class AudioPlaylistPlayer {
 
       // If 'both', slight pause then play UK
       if (this.accentMode === 'both') {
-        await new Promise(r => setTimeout(r, 600));
+        await new Promise(r => setTimeout(r, 550));
         if (!this.isPlaying) return;
         await window.audioEngine.playWord(word.word, 'uk', null, this.speed);
       } else if (this.accentMode === 'uk') {
@@ -130,12 +145,11 @@ class AudioPlaylistPlayer {
 
       if (!this.isPlaying) return;
 
-      // 2. Optional: Speak Thai meaning using SpeechSynthesis
+      // 2. Optional: Speak Thai meaning using SpeechSynthesis (awaiting full completion)
       if (this.speakMeaning && word.def_th) {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 450));
         if (!this.isPlaying) return;
-        window.audioEngine.speakSentence(word.def_th, 'th-TH', 1.0);
-        await new Promise(r => setTimeout(r, 1200));
+        await window.audioEngine.speakSentence(word.def_th, 'th-TH', this.speed);
       }
 
       if (!this.isPlaying) return;
@@ -168,6 +182,7 @@ class AudioPlaylistPlayer {
     if (playBtn) {
       playBtn.innerHTML = this.isPlaying ? '⏸️ หยุดชั่วคราว' : '▶️ เล่นต่อเนื่อง';
       playBtn.className = `btn ${this.isPlaying ? 'btn-warning' : 'btn-primary'} btn-lg`;
+      playBtn.disabled = this.playlist.length === 0;
     }
     if (visualizer) {
       visualizer.classList.toggle('active', this.isPlaying);
@@ -177,38 +192,54 @@ class AudioPlaylistPlayer {
   render() {
     if (!this.container) return;
 
+    const topics = window.vocabData
+      ? Array.from(new Set(window.vocabData.map(w => w.topic))).filter(Boolean).sort()
+      : [
+          'Arts, Media & Entertainment',
+          'Business & Work',
+          'Daily Life & Home',
+          'Education & Academic',
+          'Emotions & Personality',
+          'Food & Dining',
+          'Health & Medicine',
+          'Law, Society & Politics',
+          'Nature & Environment',
+          'Science & Technology',
+          'Travel & Transportation'
+        ];
+
     this.container.innerHTML = `
       <div class="playlist-player-wrap">
         <!-- Player Controls Bar -->
         <div class="playlist-settings-card">
           <div class="pl-settings-row">
             <div class="filter-group">
-              <label>ระดับ CEFR:</label>
+              <label for="pl-cefr">ระดับ CEFR:</label>
               <select id="pl-cefr" class="form-select" onchange="window.audioPlaylist.setFilterCefr(this.value)">
-                <option value="all">ทุกระดับ (A1 - C1)</option>
-                <option value="A1">A1 (Beginner)</option>
-                <option value="A2">A2 (Elementary)</option>
-                <option value="B1">B1 (Intermediate)</option>
-                <option value="B2">B2 (Upper-Intermediate)</option>
-                <option value="C1">C1 (Advanced)</option>
+                <option value="all" ${this.filterCefr === 'all' ? 'selected' : ''}>ทุกระดับ (A1 - C1)</option>
+                <option value="A1" ${this.filterCefr === 'A1' ? 'selected' : ''}>A1 (Beginner)</option>
+                <option value="A2" ${this.filterCefr === 'A2' ? 'selected' : ''}>A2 (Elementary)</option>
+                <option value="B1" ${this.filterCefr === 'B1' ? 'selected' : ''}>B1 (Intermediate)</option>
+                <option value="B2" ${this.filterCefr === 'B2' ? 'selected' : ''}>B2 (Upper-Intermediate)</option>
+                <option value="C1" ${this.filterCefr === 'C1' ? 'selected' : ''}>C1 (Advanced)</option>
               </select>
             </div>
 
             <div class="filter-group">
-              <label>หมวดหมู่:</label>
+              <label for="pl-topic">หมวดหมู่:</label>
               <select id="pl-topic" class="form-select" onchange="window.audioPlaylist.setFilterTopic(this.value)">
-                <option value="all">ทุกหมวดหมู่การใช้งาน</option>
-                <option value="Daily Life & Home">ชีวิตประจำวัน & บ้าน (Daily Life)</option>
-                <option value="Business & Work">การทำงาน & ธุรกิจ (Business)</option>
-                <option value="Science & Technology">วิทยาศาสตร์ & เทคโนโลยี (Tech)</option>
-                <option value="Education & Academic">การศึกษา & วิชาการ (Education)</option>
-                <option value="Food & Dining">อาหาร & เครื่องดื่ม (Food)</option>
-                <option value="Travel & Transportation">การเดินทาง & ท่องเที่ยว (Travel)</option>
-                <option value="Health & Medicine">สุขภาพ & การแพทย์ (Health)</option>
-                <option value="Emotions & Personality">อารมณ์ & นิสัย (Emotions)</option>
-                <option value="Nature & Environment">ธรรมชาติ & สิ่งแวดล้อม (Nature)</option>
-                <option value="Law, Society & Politics">กฎหมาย & สังคม (Law & Society)</option>
-                <option value="Arts, Media & Entertainment">ศิลปะ บันเทิง & สื่อ (Arts & Media)</option>
+                <option value="all" ${this.filterTopic === 'all' ? 'selected' : ''}>ทุกหมวดหมู่การใช้งาน (${topics.length} หมวด)</option>
+                ${topics.map(t => `<option value="${window.escapeHtml(t)}" ${this.filterTopic === t ? 'selected' : ''}>${window.escapeHtml(t)}</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label for="pl-status">สถานะคำศัพท์:</label>
+              <select id="pl-status" class="form-select" onchange="window.audioPlaylist.setFilterStatus(this.value)">
+                <option value="all" ${this.filterStatus === 'all' ? 'selected' : ''}>คำศัพท์ทั้งหมด</option>
+                <option value="bookmarked" ${this.filterStatus === 'bookmarked' ? 'selected' : ''}>⭐ บุ๊กมาร์กไว้เท่านั้น</option>
+                <option value="learning" ${this.filterStatus === 'learning' ? 'selected' : ''}>⏳ กำลังเรียนรู้</option>
+                <option value="unlearned" ${this.filterStatus === 'unlearned' ? 'selected' : ''}>🆕 ยังจำไม่ได้</option>
               </select>
             </div>
 
@@ -222,12 +253,21 @@ class AudioPlaylistPlayer {
             </div>
 
             <div class="filter-group">
+              <label>ความเร็วเสียง:</label>
+              <select class="form-select" onchange="window.audioPlaylist.speed = parseFloat(this.value)">
+                <option value="0.75" ${this.speed === 0.75 ? 'selected' : ''}>0.75x (ช้าชัด)</option>
+                <option value="1" ${this.speed === 1.0 ? 'selected' : ''}>1.0x (ปกติ)</option>
+                <option value="1.2" ${this.speed === 1.2 ? 'selected' : ''}>1.2x (เร็ว)</option>
+              </select>
+            </div>
+
+            <div class="filter-group">
               <label>หน่วงเวลาระหว่างคำ:</label>
               <select class="form-select" onchange="window.audioPlaylist.delaySeconds = parseFloat(this.value)">
-                <option value="1.5">1.5 วินาที (เร็ว)</option>
-                <option value="2.0" selected>2.0 วินาที (มาตรฐาน)</option>
-                <option value="3.5">3.5 วินาที (สบายๆ)</option>
-                <option value="5.0">5.0 วินาที (ฝึกคิดตาม)</option>
+                <option value="1.5" ${this.delaySeconds === 1.5 ? 'selected' : ''}>1.5 วินาที (เร็ว)</option>
+                <option value="2" ${this.delaySeconds === 2.0 ? 'selected' : ''}>2.0 วินาที (มาตรฐาน)</option>
+                <option value="3.5" ${this.delaySeconds === 3.5 ? 'selected' : ''}>3.5 วินาที (สบายๆ)</option>
+                <option value="5" ${this.delaySeconds === 5.0 ? 'selected' : ''}>5.0 วินาที (ฝึกคิดตาม)</option>
               </select>
             </div>
           </div>
@@ -265,13 +305,13 @@ class AudioPlaylistPlayer {
 
         <!-- Big Playback Controls -->
         <div class="pl-playback-controls">
-          <button class="btn btn-secondary btn-icon-round" onclick="window.audioPlaylist.prev()" title="คำก่อนหน้า">
+          <button class="btn btn-secondary btn-icon-round" onclick="window.audioPlaylist.prev()" title="คำก่อนหน้า" ${this.playlist.length === 0 ? 'disabled' : ''}>
             ⏮️
           </button>
-          <button id="playlist-play-btn" class="btn ${this.isPlaying ? 'btn-warning' : 'btn-primary'} btn-lg" onclick="window.audioPlaylist.togglePlay()">
+          <button id="playlist-play-btn" class="btn ${this.isPlaying ? 'btn-warning' : 'btn-primary'} btn-lg" onclick="window.audioPlaylist.togglePlay()" ${this.playlist.length === 0 ? 'disabled' : ''}>
             ${this.isPlaying ? '⏸️ หยุดชั่วคราว' : '▶️ เล่นต่อเนื่อง'}
           </button>
-          <button class="btn btn-secondary btn-icon-round" onclick="window.audioPlaylist.next()" title="คำถัดไป">
+          <button class="btn btn-secondary btn-icon-round" onclick="window.audioPlaylist.next()" title="คำถัดไป" ${this.playlist.length === 0 ? 'disabled' : ''}>
             ⏭️
           </button>
         </div>
@@ -279,7 +319,7 @@ class AudioPlaylistPlayer {
         <!-- Queue Preview -->
         <div class="pl-queue-card">
           <div class="pl-queue-header">
-            <h4>📋 คิวคำศัพท์ที่กำลังเล่น (${this.playlist.length} คำ)</h4>
+            <h4>📋 คิวคำศัพท์ที่กำลังเล่น (${this.playlist.length.toLocaleString()} คำ)</h4>
           </div>
           <div class="pl-queue-list" id="pl-queue-list"></div>
         </div>
@@ -296,39 +336,48 @@ class AudioPlaylistPlayer {
 
     const word = this.playlist[this.currentIndex];
     if (!word) {
-      wrap.innerHTML = `<div class="empty-state">ไม่พบคำศัพท์ในคิว</div>`;
+      wrap.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🎧</div>
+          <h3>ไม่พบคำศัพท์ในคิวที่เลือก</h3>
+          <p>ลองเปลี่ยนตัวกรองระดับ CEFR หมวดหมู่ หรือสถานะคำศัพท์</p>
+        </div>
+      `;
       return;
     }
+
+    const safeWordAttr = window.escapeAttr(word.word);
+    const safeExAttr = word.example ? window.escapeAttr(word.example) : '';
 
     wrap.innerHTML = `
       <div class="pl-showcase-card">
         <div class="pl-card-top">
-          <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${word.cefr}</span>
-          <span class="badge badge-pos">${word.pos}</span>
-          <span class="badge badge-topic">${word.topic}</span>
+          <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${window.escapeHtml(word.cefr)}</span>
+          <span class="badge badge-pos">${window.escapeHtml(word.pos)}</span>
+          <span class="badge badge-topic">${window.escapeHtml(word.topic)}</span>
           <span class="pl-index-counter">ลำดับที่ ${this.currentIndex + 1} / ${this.playlist.length}</span>
         </div>
 
-        <h1 class="pl-word-title">${word.word}</h1>
+        <h1 class="pl-word-title">${window.escapeHtml(word.word)}</h1>
 
         <div class="pl-phonetics-row">
-          <span class="pl-phon-item" onclick="window.audioEngine.playWord('${word.word}', 'us')">
-            🇺🇸 US: <strong>${word.phon_us || '-'}</strong> 🔊
-          </span>
-          <span class="pl-phon-item" onclick="window.audioEngine.playWord('${word.word}', 'uk')">
-            🇬🇧 UK: <strong>${word.phon_uk || '-'}</strong> 🔊
-          </span>
+          <button class="pl-phon-item" onclick="window.audioEngine.playWord('${safeWordAttr}', 'us', this)">
+            🇺🇸 US: <strong>${window.escapeHtml(word.phon_us || '-')}</strong> 🔊
+          </button>
+          <button class="pl-phon-item" onclick="window.audioEngine.playWord('${safeWordAttr}', 'uk', this)">
+            🇬🇧 UK: <strong>${window.escapeHtml(word.phon_uk || '-')}</strong> 🔊
+          </button>
         </div>
 
         <div class="pl-thai-box">
-          <h2>${word.def_th}</h2>
-          <p class="pl-en-def">${word.def_en}</p>
+          <h2>${window.escapeHtml(word.def_th)}</h2>
+          <p class="pl-en-def">${window.escapeHtml(word.def_en)}</p>
         </div>
 
         ${word.example ? `
-        <div class="pl-example-box" onclick="window.audioEngine.speakSentence('${word.example.replace(/'/g, "\\'")}', 'en-US')">
-          <span class="pl-example-label">ตัวอย่างประโยค:</span>
-          <p class="pl-example-text">"${word.example}" 🔊</p>
+        <div class="pl-example-box" onclick="window.audioEngine.speakSentence('${safeExAttr}', 'en-US', 0.95, this)">
+          <span class="pl-example-label">ตัวอย่างประโยค (คลิกเพื่อฟัง):</span>
+          <p class="pl-example-text">"${window.escapeHtml(word.example)}" 🔊</p>
         </div>
         ` : ''}
       </div>
@@ -341,6 +390,11 @@ class AudioPlaylistPlayer {
     const listEl = document.getElementById('pl-queue-list');
     if (!listEl) return;
 
+    if (this.playlist.length === 0) {
+      listEl.innerHTML = `<div class="text-muted" style="text-align:center; padding: 16px;">ไม่มีรายการคำศัพท์ในคิว</div>`;
+      return;
+    }
+
     // Show window around current index
     const start = Math.max(0, this.currentIndex - 2);
     const end = Math.min(this.playlist.length, this.currentIndex + 8);
@@ -352,9 +406,9 @@ class AudioPlaylistPlayer {
       return `
         <div class="pl-queue-item ${isCurrent ? 'active' : ''}" onclick="window.audioPlaylist.jumpTo(${actualIdx})">
           <span class="q-idx">#${actualIdx + 1}</span>
-          <strong class="q-word">${item.word}</strong>
-          <span class="badge badge-sm badge-${item.cefr.toLowerCase()}">${item.cefr}</span>
-          <span class="q-th">${item.def_th}</span>
+          <strong class="q-word">${window.escapeHtml(item.word)}</strong>
+          <span class="badge badge-sm badge-${item.cefr.toLowerCase()}">${window.escapeHtml(item.cefr)}</span>
+          <span class="q-th">${window.escapeHtml(item.def_th)}</span>
           ${isCurrent ? '<span class="q-playing-badge">▶ กำลังเล่น</span>' : ''}
         </div>
       `;
@@ -371,22 +425,33 @@ class AudioPlaylistPlayer {
     }
   }
 
-  setFilterCefr(val) {
-    this.filterCefr = val;
+  _rebuildAndRefresh() {
+    const wasPlaying = this.isPlaying;
+    if (wasPlaying) {
+      this.pause();
+    }
     this.buildPlaylist();
     this.render();
+  }
+
+  setFilterCefr(val) {
+    this.filterCefr = val;
+    this._rebuildAndRefresh();
   }
 
   setFilterTopic(val) {
     this.filterTopic = val;
-    this.buildPlaylist();
-    this.render();
+    this._rebuildAndRefresh();
+  }
+
+  setFilterStatus(val) {
+    this.filterStatus = val;
+    this._rebuildAndRefresh();
   }
 
   toggleShuffle(val) {
     this.isShuffled = val;
-    this.buildPlaylist();
-    this.render();
+    this._rebuildAndRefresh();
   }
 }
 

@@ -119,6 +119,11 @@ class VocabApp {
       window.audioPlaylist.pause();
     }
 
+    // Remove quiz keyboard handler if leaving quiz view
+    if (tabName !== 'quiz' && window.quizEngine && window.quizEngine._removeKeyHandler) {
+      window.quizEngine._removeKeyHandler();
+    }
+
     // Refresh views on activation
     if (tabName === 'flashcards' && window.flashcardCtrl) {
       window.flashcardCtrl.init(document.getElementById('flashcard-container'));
@@ -255,7 +260,7 @@ class VocabApp {
   }
 
   applyFilters() {
-    let list = this.rawWords;
+    let list = [...this.rawWords];
 
     // Search query match
     if (this.searchTerm) {
@@ -306,7 +311,10 @@ class VocabApp {
     } else if (this.sortBy === 'cefr-desc') {
       list.sort((a, b) => (cefrRank[b.cefr] || 3) - (cefrRank[a.cefr] || 3) || a.word.localeCompare(b.word));
     } else if (this.sortBy === 'random') {
-      list = [...list].sort(() => 0.5 - Math.random());
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
     }
 
     this.filteredWords = list;
@@ -326,6 +334,9 @@ class VocabApp {
     const grid = document.getElementById('word-grid');
     if (!grid) return;
 
+    const loadMoreContainer = document.getElementById('load-more-container');
+    const loadMoreBtn = document.getElementById('load-more-btn');
+
     if (this.filteredWords.length === 0) {
       grid.innerHTML = `
         <div class="empty-state-card">
@@ -335,20 +346,17 @@ class VocabApp {
           <button class="btn btn-primary" onclick="window.app.resetFilters()">ล้างตัวกรองทั้งหมด</button>
         </div>
       `;
-      const loadMoreBtn = document.getElementById('load-more-btn');
-      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      if (loadMoreContainer) loadMoreContainer.style.display = 'none';
       return;
     }
 
     const itemsToShow = this.filteredWords.slice(0, this.currentPage * this.pageSize);
     grid.innerHTML = itemsToShow.map(word => this.createWordCardHtml(word)).join('');
 
-    const loadMoreContainer = document.getElementById('load-more-container');
-    const loadMoreBtn = document.getElementById('load-more-btn');
     if (loadMoreContainer && loadMoreBtn) {
       if (itemsToShow.length < this.filteredWords.length) {
         loadMoreContainer.style.display = 'block';
-        loadMoreBtn.innerHTML = `โหลดคำศัพท์เพิ่มเติม (${itemsToShow.length} / ${this.filteredWords.length})`;
+        loadMoreBtn.innerHTML = `โหลดคำศัพท์เพิ่มเติม (${itemsToShow.length.toLocaleString()} / ${this.filteredWords.length.toLocaleString()})`;
       } else {
         loadMoreContainer.style.display = 'none';
       }
@@ -364,13 +372,14 @@ class VocabApp {
     const isMastered = window.storageMgr.isMastered(word.id);
     const isLearning = window.storageMgr.isLearning(word.id);
     const isBookmarked = window.storageMgr.isBookmarked(word.id);
+    const safeWordHtml = window.escapeHtml(word.word);
 
     return `
       <div class="word-card ${isMastered ? 'card-mastered' : isLearning ? 'card-learning' : ''}" data-id="${word.id}">
         <div class="card-top-row">
           <div class="card-badges-left">
-            <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${word.cefr}</span>
-            <span class="badge badge-pos">${word.pos}</span>
+            <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${window.escapeHtml(word.cefr)}</span>
+            <span class="badge badge-pos">${window.escapeHtml(word.pos)}</span>
           </div>
           <div class="card-actions-right">
             <button class="btn-check ${isMastered ? 'active' : ''}" data-id="${word.id}" title="${isMastered ? 'จำได้แล้ว (คลิกเพื่อยกเลิก)' : 'ทำเครื่องหมายว่าจำได้แล้ว'}" aria-label="${isMastered ? 'จำได้แล้ว' : 'ทำเครื่องหมายว่าจำได้แล้ว'}">
@@ -383,24 +392,24 @@ class VocabApp {
         </div>
 
         <div class="card-word-title-row">
-          <h3 class="card-word-title">${word.word}</h3>
+          <h3 class="card-word-title">${safeWordHtml}</h3>
         </div>
 
         <div class="card-phonetics">
-          <button class="phon-badge" data-word="${word.word}" data-accent="us" title="ฟังสำเนียงอเมริกัน">
-            🇺🇸 ${word.phon_us || '-'} 🔊
+          <button class="phon-badge" data-word="${safeWordHtml}" data-accent="us" title="ฟังสำเนียงอเมริกัน">
+            🇺🇸 ${window.escapeHtml(word.phon_us || '-')} 🔊
           </button>
-          <button class="phon-badge" data-word="${word.word}" data-accent="uk" title="ฟังสำเนียงอังกฤษ">
-            🇬🇧 ${word.phon_uk || '-'} 🔊
+          <button class="phon-badge" data-word="${safeWordHtml}" data-accent="uk" title="ฟังสำเนียงอังกฤษ">
+            🇬🇧 ${window.escapeHtml(word.phon_uk || '-')} 🔊
           </button>
         </div>
 
         <div class="card-def-th">
-          <p>${word.def_th}</p>
+          <p>${window.escapeHtml(word.def_th)}</p>
         </div>
 
         <div class="card-footer-topic">
-          <span class="topic-tag">🏷️ ${word.topic}</span>
+          <span class="topic-tag">🏷️ ${window.escapeHtml(word.topic)}</span>
           ${isMastered ? '<span class="status-pill status-pill-mastered">✅ จำได้แล้ว</span>' : ''}
           ${isLearning ? '<span class="status-pill status-pill-learning">⏳ กำลังจำ</span>' : ''}
         </div>
@@ -467,7 +476,9 @@ class VocabApp {
     this.sortBy = 'az';
 
     const searchInput = document.getElementById('search-input');
+    const clearSearchBtn = document.getElementById('clear-search-btn');
     if (searchInput) searchInput.value = '';
+    if (clearSearchBtn) clearSearchBtn.style.display = 'none';
 
     document.querySelectorAll('.cefr-pill').forEach(p => {
       p.classList.toggle('active', p.dataset.cefr === 'all');
@@ -482,13 +493,28 @@ class VocabApp {
   }
 
   searchByTerm(term) {
+    this.closeModal();
     this.switchTab('explore');
     const searchInput = document.getElementById('search-input');
+    const clearSearchBtn = document.getElementById('clear-search-btn');
     if (searchInput) {
       searchInput.value = term;
-      this.searchTerm = term.toLowerCase();
+      this.searchTerm = term.trim().toLowerCase();
+      if (clearSearchBtn) {
+        clearSearchBtn.style.display = this.searchTerm ? 'block' : 'none';
+      }
       this.applyFilters();
-      searchInput.focus();
+      if (term) searchInput.focus();
+    }
+  }
+
+  handleTagClick(term) {
+    if (!term) return;
+    const match = this.rawWords.find(w => w.word.toLowerCase() === term.trim().toLowerCase());
+    if (match) {
+      this.openModal(match.id);
+    } else {
+      this.searchByTerm(term);
     }
   }
 
@@ -518,29 +544,35 @@ class VocabApp {
     const isMastered = window.storageMgr.isMastered(word.id);
     const isLearning = window.storageMgr.isLearning(word.id);
     const isBookmarked = window.storageMgr.isBookmarked(word.id);
+    const safeWordAttr = window.escapeAttr(word.word);
+
+    // Find prev/next in filtered list for smooth modal navigation
+    const currentIdx = this.filteredWords.findIndex(w => w.id === word.id);
+    const prevWord = currentIdx > 0 ? this.filteredWords[currentIdx - 1] : null;
+    const nextWord = (currentIdx !== -1 && currentIdx < this.filteredWords.length - 1) ? this.filteredWords[currentIdx + 1] : null;
 
     const synonymsHtml = word.synonyms && word.synonyms.length > 0
-      ? word.synonyms.map(s => `<button class="tag-click" onclick="window.app.searchByTerm('${s}')">${s}</button>`).join('')
+      ? word.synonyms.map(s => `<button class="tag-click" onclick="window.app.handleTagClick('${window.escapeAttr(s)}')">${window.escapeHtml(s)}</button>`).join('')
       : '<span class="text-muted">- ไม่มี -</span>';
 
     const antonymsHtml = word.antonyms && word.antonyms.length > 0
-      ? word.antonyms.map(a => `<button class="tag-click" onclick="window.app.searchByTerm('${a}')">${a}</button>`).join('')
+      ? word.antonyms.map(a => `<button class="tag-click" onclick="window.app.handleTagClick('${window.escapeAttr(a)}')">${window.escapeHtml(a)}</button>`).join('')
       : '<span class="text-muted">- ไม่มี -</span>';
 
     modalBody.innerHTML = `
       <div class="modal-word-header">
         <div class="modal-badge-group">
-          <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${word.cefr}</span>
-          <span class="badge badge-pos">${word.pos}</span>
-          <span class="badge badge-topic">🏷️ ${word.topic}</span>
+          <span class="badge badge-cefr badge-${word.cefr.toLowerCase()}">${window.escapeHtml(word.cefr)}</span>
+          <span class="badge badge-pos">${window.escapeHtml(word.pos)}</span>
+          <span class="badge badge-topic">🏷️ ${window.escapeHtml(word.topic)}</span>
         </div>
-        <button id="modal-star-btn" class="btn btn-icon ${isBookmarked ? 'active text-gold' : ''}" onclick="window.app.toggleModalBookmark()">
+        <button id="modal-star-btn" class="btn btn-icon ${isBookmarked ? 'active text-gold' : ''}" onclick="window.app.toggleModalBookmark()" title="${isBookmarked ? 'ยกเลิกบุ๊กมาร์ก' : 'บุ๊กมาร์ก'}">
           ${isBookmarked ? '★' : '☆'}
         </button>
       </div>
 
       <div class="modal-word-title-wrap">
-        <h1 class="modal-word-title">${word.word}</h1>
+        <h1 class="modal-word-title">${window.escapeHtml(word.word)}</h1>
       </div>
 
       <!-- Phonetics & Pronunciation -->
@@ -549,9 +581,9 @@ class VocabApp {
           <div class="phon-meta">
             <span class="flag-icon">🇺🇸</span>
             <strong>อเมริกัน (US):</strong>
-            <code>${word.phon_us || '-'}</code>
+            <code>${window.escapeHtml(word.phon_us || '-')}</code>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="window.audioEngine.playWord('${word.word}', 'us', this)">
+          <button class="btn btn-primary btn-sm" onclick="window.audioEngine.playWord('${safeWordAttr}', 'us', this)">
             🔊 ฟังเสียง US
           </button>
         </div>
@@ -560,15 +592,15 @@ class VocabApp {
           <div class="phon-meta">
             <span class="flag-icon">🇬🇧</span>
             <strong>บริติช (UK):</strong>
-            <code>${word.phon_uk || '-'}</code>
+            <code>${window.escapeHtml(word.phon_uk || '-')}</code>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="window.audioEngine.playWord('${word.word}', 'uk', this)">
+          <button class="btn btn-secondary btn-sm" onclick="window.audioEngine.playWord('${safeWordAttr}', 'uk', this)">
             🔊 ฟังเสียง UK
           </button>
         </div>
 
         <div class="modal-phon-slow">
-          <button class="btn btn-outline btn-sm" onclick="window.audioEngine.playWord('${word.word}', 'us', this, 0.75)">
+          <button class="btn btn-outline btn-sm" onclick="window.audioEngine.playWord('${safeWordAttr}', 'us', this, 0.75)">
             🐢 ฟังช้าๆ (0.75x)
           </button>
         </div>
@@ -577,12 +609,12 @@ class VocabApp {
       <!-- Definitions -->
       <div class="modal-section modal-thai-section">
         <h3>🇹🇭 ความหมายภาษาไทย:</h3>
-        <p class="modal-th-text">${word.def_th_full || word.def_th}</p>
+        <p class="modal-th-text">${window.escapeHtml(word.def_th_full || word.def_th)}</p>
       </div>
 
       <div class="modal-section">
         <h3>📖 Oxford Definition (คำอธิบายภาษาอังกฤษ):</h3>
-        <p class="modal-en-def">${word.def_en}</p>
+        <p class="modal-en-def">${window.escapeHtml(word.def_en)}</p>
       </div>
 
       ${word.example ? `
@@ -591,7 +623,7 @@ class VocabApp {
           <h3>💬 ตัวอย่างประโยคการใช้งาน:</h3>
           <button class="btn-play-mini" id="modal-play-ex-btn">🔊 ฟังประโยค</button>
         </div>
-        <blockquote class="modal-example-quote">"${word.example}"</blockquote>
+        <blockquote class="modal-example-quote">"${window.escapeHtml(word.example)}"</blockquote>
       </div>
       ` : ''}
 
@@ -615,31 +647,47 @@ class VocabApp {
         <a href="https://dict.longdo.com/search/${encodeURIComponent(word.word)}" target="_blank" rel="noopener">Longdo Dict ↗</a>
       </div>
 
-      <!-- Action Status Buttons -->
+      <!-- Action Status & Navigation Buttons -->
       <div class="modal-actions-bar">
-        <button id="modal-btn-learning" class="btn ${isLearning ? 'btn-warning' : 'btn-outline'}" onclick="window.app.setModalStatus('learning')">
-          ${isLearning ? '⏳ กำลังเรียนรู้อยู่' : '⏳ ตั้งเป็นกำลังจำ'}
-        </button>
-        <button id="modal-btn-mastered" class="btn ${isMastered ? 'btn-success' : 'btn-outline'}" onclick="window.app.setModalStatus('mastered')">
-          ${isMastered ? '✅ จำคำนี้ได้แล้ว' : '✅ ทำเครื่องหมายว่าจำได้แล้ว'}
-        </button>
+        <div class="modal-nav-prevnext">
+          <button class="btn btn-secondary btn-sm" ${prevWord ? `onclick="window.app.openModal(${prevWord.id})"` : 'disabled'} title="คำก่อนหน้า (←)">
+            ◀ ก่อนหน้า
+          </button>
+          <button class="btn btn-secondary btn-sm" ${nextWord ? `onclick="window.app.openModal(${nextWord.id})"` : 'disabled'} title="คำถัดไป (→)">
+            ถัดไป ▶
+          </button>
+        </div>
+        <div class="modal-status-btns">
+          <button id="modal-btn-learning" class="btn ${isLearning ? 'btn-warning' : 'btn-outline'}" onclick="window.app.setModalStatus('learning')">
+            ${isLearning ? '⏳ กำลังเรียนรู้อยู่' : '⏳ ตั้งเป็นกำลังจำ'}
+          </button>
+          <button id="modal-btn-mastered" class="btn ${isMastered ? 'btn-success' : 'btn-outline'}" onclick="window.app.setModalStatus('mastered')">
+            ${isMastered ? '✅ จำคำนี้ได้แล้ว' : '✅ ทำเครื่องหมายว่าจำได้แล้ว'}
+          </button>
+        </div>
       </div>
     `;
 
     const exBtn = document.getElementById('modal-play-ex-btn');
     if (exBtn && word.example) {
       exBtn.addEventListener('click', () => {
-        window.audioEngine.speakSentence(word.example, 'en-US');
+        window.audioEngine.speakSentence(word.example, 'en-US', 0.95, exBtn);
       });
     }
 
+    const wasAlreadyOpen = modalOverlay.classList.contains('open');
     modalOverlay.classList.add('open');
     document.body.style.overflow = 'hidden';
 
-    // Auto-play US sound on open
-    setTimeout(() => {
-      window.audioEngine.playWord(word.word, 'us');
-    }, 200);
+    // Auto-play preferred accent sound on initial modal open
+    if (!wasAlreadyOpen) {
+      setTimeout(() => {
+        if (this.activeModalWord && this.activeModalWord.id === word.id) {
+          const prefAccent = (window.storageMgr && window.storageMgr.settings.preferredAccent) || 'us';
+          window.audioEngine.playWord(word.word, prefAccent);
+        }
+      }, 200);
+    }
   }
 
   closeModal() {
@@ -683,7 +731,17 @@ class VocabApp {
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         this.closeModal();
-      } else if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+        if (window.profileMgr) window.profileMgr.closeProfileModal();
+      } else if (this.activeModalWord && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        const currentIdx = this.filteredWords.findIndex(w => w.id === this.activeModalWord.id);
+        if (e.key === 'ArrowLeft' && currentIdx > 0) {
+          e.preventDefault();
+          this.openModal(this.filteredWords[currentIdx - 1].id);
+        } else if (e.key === 'ArrowRight' && currentIdx !== -1 && currentIdx < this.filteredWords.length - 1) {
+          e.preventDefault();
+          this.openModal(this.filteredWords[currentIdx + 1].id);
+        }
+      } else if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
         e.preventDefault();
         const searchInput = document.getElementById('search-input');
         if (searchInput) searchInput.focus();
@@ -707,6 +765,7 @@ class VocabApp {
     if (!container) return;
 
     const stats = window.storageMgr.getStats(this.rawWords.length || 5943);
+    const progressDeg = Math.round((parseFloat(stats.progressPercent) / 100) * 360);
 
     // CEFR Breakdown
     const cefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1'];
@@ -735,14 +794,16 @@ class VocabApp {
             <h2>📊 สรุปความคืบหน้าการเรียนรู้คำศัพท์ Oxford 5,000</h2>
             <p>ฝึกฝนอย่างต่อเนื่องทุกวันเพื่อจำคำศัพท์ภาษาอังกฤษได้อย่างถาวร</p>
             <div class="hero-streak-badge">
-              🔥 ความต่อเนื่องในการเรียน (Streak): <strong>${stats.streak} วัน</strong>
-              <span class="streak-sub">เป้าหมายวันนี้: ${stats.todayCount} / ${stats.dailyGoal} คำ</span>
+              <span>🔥 ความต่อเนื่องในการเรียน (Streak): <strong>${stats.streak} วัน</strong></span>
+              <span class="streak-sub">เป้าหมายวันนี้: <strong>${stats.todayCount} / ${stats.dailyGoal}</strong> คำ</span>
             </div>
           </div>
           <div class="hero-right">
-            <div class="hero-progress-ring">
-              <span class="ring-val">${stats.progressPercent}%</span>
-              <span class="ring-label">จำได้แล้ว</span>
+            <div class="hero-progress-ring" style="--progress-deg: ${progressDeg}deg;">
+              <div class="ring-inner">
+                <span class="ring-val">${stats.progressPercent}%</span>
+                <span class="ring-label">จำได้แล้ว</span>
+              </div>
             </div>
           </div>
         </div>
@@ -796,7 +857,7 @@ class VocabApp {
                 </div>
                 <div class="cbar-stats">
                   <strong>${s.percent}%</strong>
-                  <span>(${s.mastered} / ${s.total} คำ)</span>
+                  <span>(${s.mastered.toLocaleString()} / ${s.total.toLocaleString()} คำ)</span>
                 </div>
               </div>
             `).join('')}
@@ -810,14 +871,14 @@ class VocabApp {
             ${topicStats.map(t => `
               <div class="topic-stat-item">
                 <div class="tstat-header">
-                  <strong>${t.topic}</strong>
+                  <strong>${window.escapeHtml(t.topic)}</strong>
                   <span class="tstat-percent">${t.percent}%</span>
                 </div>
                 <div class="tstat-track">
                   <div class="tstat-fill" style="width: ${t.percent}%;"></div>
                 </div>
                 <div class="tstat-footer">
-                  <span>จำได้ ${t.mastered} / ${t.total} คำ</span>
+                  <span>จำได้ ${t.mastered.toLocaleString()} / ${t.total.toLocaleString()} คำ</span>
                 </div>
               </div>
             `).join('')}

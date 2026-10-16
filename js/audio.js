@@ -11,6 +11,9 @@ class AudioEngine {
     this.voices = [];
     this.speed = 1.0;
     this.audioCtx = null;
+    this._playId = 0;
+    this._currentTimer = null;
+    this._activeResolve = null;
 
     if (this.synth) {
       this._loadVoices();
@@ -54,6 +57,10 @@ class AudioEngine {
     const cleanWord = word.trim().toLowerCase();
     const rate = customRate || this.speed;
 
+    // Stop existing audio and increment playback token
+    this.stop();
+    const playId = ++this._playId;
+
     if (buttonEl) {
       buttonEl.classList.add('playing');
     }
@@ -61,9 +68,6 @@ class AudioEngine {
     const removePlaying = () => {
       if (buttonEl) buttonEl.classList.remove('playing');
     };
-
-    // Stop existing audio
-    this.stop();
 
     // Type 1 = UK, Type 2 = US
     const typeCode = accent.toLowerCase() === 'uk' ? '1' : '2';
@@ -74,90 +78,152 @@ class AudioEngine {
       this.currentAudio = audio;
       audio.playbackRate = rate;
 
-      // Timeout for network fallback
-      const playPromise = new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
+      await new Promise((resolve, reject) => {
+        this._activeResolve = () => {
+          removePlaying();
+          resolve();
+        };
+
+        this._currentTimer = setTimeout(() => {
           audio.pause();
           reject(new Error('Audio load timeout'));
         }, 3500);
 
         audio.onended = () => {
-          clearTimeout(timer);
+          clearTimeout(this._currentTimer);
+          this._activeResolve = null;
           removePlaying();
           resolve();
         };
 
         audio.onerror = () => {
-          clearTimeout(timer);
+          clearTimeout(this._currentTimer);
+          this._activeResolve = null;
           reject(new Error('Network audio error'));
         };
 
-        audio.play().catch(reject);
+        audio.play().catch(err => {
+          clearTimeout(this._currentTimer);
+          this._activeResolve = null;
+          reject(err);
+        });
       });
-
-      await playPromise;
     } catch (err) {
-      // Fallback to Web Speech API
-      this._speakSpeechSynth(cleanWord, accent, rate, removePlaying);
+      // Only fallback to Web Speech API if this playback wasn't cancelled by stop()
+      if (playId === this._playId) {
+        await this._speakSpeechSynth(cleanWord, accent, rate, removePlaying, playId);
+      } else {
+        removePlaying();
+      }
     }
   }
 
-  _speakSpeechSynth(text, accent, rate, onEndCallback) {
-    if (!this.synth) {
-      if (onEndCallback) onEndCallback();
-      return;
-    }
+  _speakSpeechSynth(text, accent, rate, onEndCallback, playId) {
+    return new Promise((resolve) => {
+      const finish = () => {
+        clearTimeout(this._currentTimer);
+        this._activeResolve = null;
+        if (onEndCallback) onEndCallback();
+        resolve();
+      };
 
-    this.synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const targetLang = accent.toLowerCase() === 'uk' ? 'en-GB' : 'en-US';
-    utterance.lang = targetLang;
-    utterance.rate = rate;
-
-    // Pick best matching voice
-    if (this.voices.length > 0) {
-      const matchingVoice = this.voices.find(v => v.lang.replace('_', '-').startsWith(targetLang));
-      if (matchingVoice) {
-        utterance.voice = matchingVoice;
+      if (!this.synth || (playId && playId !== this._playId)) {
+        finish();
+        return;
       }
-    }
 
-    utterance.onend = () => {
-      if (onEndCallback) onEndCallback();
-    };
+      this._activeResolve = finish;
+      this.synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const targetLang = accent.toLowerCase() === 'uk' ? 'en-GB' : 'en-US';
+      utterance.lang = targetLang;
+      utterance.rate = rate;
 
-    utterance.onerror = () => {
-      if (onEndCallback) onEndCallback();
-    };
+      if (this.voices.length === 0) this._loadVoices();
+      if (this.voices.length > 0) {
+        const matchingVoice = this.voices.find(v => v.lang.replace('_', '-').startsWith(targetLang));
+        if (matchingVoice) {
+          utterance.voice = matchingVoice;
+        }
+      }
 
-    this.synth.speak(utterance);
+      utterance.onend = finish;
+      utterance.onerror = finish;
+
+      // Safety timeout in case SpeechSynthesis onend fails to fire
+      this._currentTimer = setTimeout(finish, 4500);
+      this.synth.speak(utterance);
+    });
   }
 
   /**
    * Speak arbitrary text (e.g. example sentence or Thai explanation)
+   * Returns a Promise that resolves when speech finishes or is stopped.
    */
-  speakSentence(text, lang = 'en-US', rate = 0.95) {
-    if (!this.synth || !text) return;
-    this.synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = rate;
+  speakSentence(text, lang = 'en-US', rate = 0.95, buttonEl = null) {
+    this.stop();
+    const playId = ++this._playId;
 
-    if (this.voices.length > 0) {
-      const match = this.voices.find(v => v.lang.replace('_', '-').startsWith(lang));
-      if (match) utterance.voice = match;
-    }
+    return new Promise((resolve) => {
+      if (!this.synth || !text) {
+        resolve();
+        return;
+      }
 
-    this.synth.speak(utterance);
+      if (buttonEl) buttonEl.classList.add('playing');
+
+      const finish = () => {
+        clearTimeout(this._currentTimer);
+        this._activeResolve = null;
+        if (buttonEl) buttonEl.classList.remove('playing');
+        resolve();
+      };
+
+      this._activeResolve = finish;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      utterance.rate = rate;
+
+      if (this.voices.length === 0) this._loadVoices();
+      if (this.voices.length > 0) {
+        const match = this.voices.find(v => v.lang.replace('_', '-').startsWith(lang));
+        if (match) utterance.voice = match;
+      }
+
+      utterance.onend = finish;
+      utterance.onerror = finish;
+
+      // Dynamic safety timeout based on text length
+      const maxWaitMs = Math.min(12000, Math.max(3500, text.length * 140));
+      this._currentTimer = setTimeout(finish, maxWaitMs);
+
+      if (playId === this._playId) {
+        this.synth.speak(utterance);
+      } else {
+        finish();
+      }
+    });
   }
 
   stop() {
+    this._playId++;
+    if (this._currentTimer) {
+      clearTimeout(this._currentTimer);
+      this._currentTimer = null;
+    }
     if (this.currentAudio) {
+      this.currentAudio.onended = null;
+      this.currentAudio.onerror = null;
       this.currentAudio.pause();
       this.currentAudio = null;
     }
     if (this.synth) {
       this.synth.cancel();
+    }
+    if (this._activeResolve) {
+      const res = this._activeResolve;
+      this._activeResolve = null;
+      res();
     }
     document.querySelectorAll('.playing').forEach(el => el.classList.remove('playing'));
   }
